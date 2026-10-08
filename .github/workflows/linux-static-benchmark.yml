@@ -1,0 +1,70 @@
+# SOURCE candidate only. Root must publish only to an isolated TEST repository.
+# GitHub baseline first; this version grants no native route or workflow dispatch.
+name: TEST exact Foundation linux-static benchmark
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  linux-static:
+    name: linux-static
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: agent-teams-ai/engineering-foundation
+          ref: 9a3ec1fc93c351fd87e80d06f6f62e290fbeea2d
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: pnpm/setup@703c52620218391530e48b9e8870d5c0082e1b9b # v2.1.0
+        with: { install: false }
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - name: Record isolated TEST environment
+        run: |
+          test "$(git rev-parse HEAD)" = 9a3ec1fc93c351fd87e80d06f6f62e290fbeea2d
+          mkdir -p "$RUNNER_TEMP/TEST-linux-static-benchmark"
+          printf 'source_sha=%s\nnode=%s\npnpm=%s\n' "$(git rev-parse HEAD)" "$(node --version)" "$(pnpm --version)" > "$RUNNER_TEMP/TEST-linux-static-benchmark/environment.txt"
+          nproc >> "$RUNNER_TEMP/TEST-linux-static-benchmark/environment.txt"
+          free -b >> "$RUNNER_TEMP/TEST-linux-static-benchmark/environment.txt"
+          df -B1 . "$RUNNER_TEMP" >> "$RUNNER_TEMP/TEST-linux-static-benchmark/environment.txt"
+      - run: /usr/bin/time -v -o "$RUNNER_TEMP/TEST-linux-static-benchmark/install.time" pnpm install --frozen-lockfile --ignore-scripts
+      - name: Validate package Changeset coverage
+        if: ${{ github.event_name == 'pull_request' && (github.event.pull_request.head.repo.full_name != github.repository || github.head_ref != 'changeset-release/main') }}
+        env:
+          FOUNDATION_CHANGESET_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: pnpm changeset:coverage
+      - run: /usr/bin/time -v -o "$RUNNER_TEMP/TEST-linux-static-benchmark/rebuild.time" pnpm rebuild
+      - run: /usr/bin/time -v -o "$RUNNER_TEMP/TEST-linux-static-benchmark/lint.time" pnpm lint
+      - run: /usr/bin/time -v -o "$RUNNER_TEMP/TEST-linux-static-benchmark/typecheck.time" pnpm typecheck
+      - name: Run Foundation check
+        id: foundation-check
+        run: |
+          set -o pipefail
+          /usr/bin/time -v -o "$RUNNER_TEMP/TEST-linux-static-benchmark/foundation-check.time" node packages/engineering-foundation/dist/cli.js check --consumer . --format json | tee "$RUNNER_TEMP/foundation-check.json"
+        env:
+          FOUNDATION_PR_HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
+      - name: Show SDK public API report
+        if: ${{ always() && steps.foundation-check.outcome != 'skipped' }}
+        run: node scripts/sdk-api-ci-summary.mjs "$RUNNER_TEMP/foundation-check.json"
+      - run: /usr/bin/time -v -o "$RUNNER_TEMP/TEST-linux-static-benchmark/release-owned-files-check.time" pnpm release-owned-files:check
+        env:
+          FOUNDATION_PR_HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
+      - run: /usr/bin/time -v -o "$RUNNER_TEMP/TEST-linux-static-benchmark/architecture-patterns.time" pnpm architecture:patterns
+      - run: /usr/bin/time -v -o "$RUNNER_TEMP/TEST-linux-static-benchmark/architecture-patterns-test.time" pnpm architecture:patterns:test
+      - run: /usr/bin/time -v -o "$RUNNER_TEMP/TEST-linux-static-benchmark/nx-graph-check.time" pnpm nx:graph:check
+      - run: /usr/bin/time -v -o "$RUNNER_TEMP/TEST-linux-static-benchmark/security-workflows.time" pnpm security:workflows
+      - run: /usr/bin/time -v -o "$RUNNER_TEMP/TEST-linux-static-benchmark/dead-code-check.time" pnpm dead-code:check
+      - run: /usr/bin/time -v -o "$RUNNER_TEMP/TEST-linux-static-benchmark/parser-spike-check.time" pnpm parser-spike:check
+      - name: Preserve matched workload evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: TEST-linux-static-benchmark-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/TEST-linux-static-benchmark
+            ${{ runner.temp }}/foundation-check.json
+          if-no-files-found: warn
