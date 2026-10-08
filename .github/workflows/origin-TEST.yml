@@ -1,0 +1,15 @@
+name: Synthetic native origin TEST
+
+on:
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  synthetic:
+    runs-on: [self-hosted, hci-origin-TEST-20261009]
+    timeout-minutes: 2
+    steps:
+      - name: Constant synthetic marker
+        shell: bash
+        run: printf '%s\n' 'synthetic native origin TEST only'
