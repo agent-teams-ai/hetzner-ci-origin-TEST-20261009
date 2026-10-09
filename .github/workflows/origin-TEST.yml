@@ -7,7 +7,7 @@ permissions: {}
 
 jobs:
   synthetic:
-    runs-on: [self-hosted, hci-origin-TEST-20261009]
+    runs-on: hci-origin-TEST-20261009
     timeout-minutes: 5
     steps:
       - name: Constant synthetic marker
