@@ -12,4 +12,6 @@ jobs:
     steps:
       - name: Constant synthetic marker
         shell: bash
-        run: printf '%s\n' 'synthetic native origin TEST only'
+        run: |
+          printf '%s\n' 'synthetic native origin TEST only'
+          sleep 20
