@@ -8,10 +8,10 @@ permissions: {}
 jobs:
   synthetic:
     runs-on: [self-hosted, hci-origin-TEST-20261009]
-    timeout-minutes: 2
+    timeout-minutes: 5
     steps:
       - name: Constant synthetic marker
         shell: bash
         run: |
           printf '%s\n' 'synthetic native origin TEST only'
-          sleep 20
+          sleep 180
